@@ -1,0 +1,56 @@
+# Docker
+# Build a Docker image
+# https://docs.microsoft.com/azure/devops/pipelines/languages/docker
+
+trigger:
+- master
+
+resources:
+- repo: self
+
+variables:
+  tag: '$(Build.BuildId)'
+
+stages:
+- stage: Build
+  displayName: Build image
+  jobs:
+  - job: Build
+    displayName: Build
+    pool:
+      name: LinuxHTZ
+    steps:
+    - task: Docker@2
+      displayName: Build image
+      inputs:
+        containerRegistry: 'Docker registry'
+        repository: 'firebase-bigquery'
+        command: 'buildAndPush'
+        Dockerfile: '**/Dockerfile'
+        tags: |
+            latest
+            v$(tag)
+        buildContext: '.'
+
+    - task: CmdLine@2
+      displayName: Remove Image
+      inputs:
+        script: 'docker rmi registry.ziture.ir/firebase-bigquery:latest registry.ziture.ir/firebase-bigquery:v$(tag) && docker system prune --force'
+
+- stage: Deploy
+  displayName: Deploy
+  jobs:
+  - job: Deploy
+    displayName: Deploy
+    pool:
+      name: LinuxHTZ
+    steps:
+    - task: SSH@0
+      inputs:
+        sshEndpoint: 'Recommender server'
+        runOptions: 'inline'
+        inline: |
+          docker pull registry.ziture.ir/firebase-bigquery:latest;
+          docker compose -f /opt/firebase/docker-compose.yml up -d 2>&1
+        readyTimeout: '20000'
+
